@@ -63,7 +63,8 @@
 
         <arquillian-managed>true</arquillian-managed>
         <jboss-cli.executable>./jboss-cli.sh</jboss-cli.executable>
-        <keycloak.management.port>10090</keycloak.management.port>
+        <keycloak.management.port>9990</keycloak.management.port>
+        <!--<keycloak.management.port>10090</keycloak.management.port>-->
         <selenium-bom.version>3.11.0</selenium-bom.version>
         <arquillian-bom.version>1.4.0.Final</arquillian-bom.version>
         <arquillian-drone-bom.version>2.5.1</arquillian-drone-bom.version>

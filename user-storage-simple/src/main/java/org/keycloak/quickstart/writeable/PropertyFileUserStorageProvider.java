@@ -28,6 +28,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.utils.UserModelDelegate;
 import org.keycloak.storage.StorageId;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.adapter.AbstractUserAdapterFederatedStorage;
@@ -48,7 +49,7 @@ import java.util.Set;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
- * @version $Revision: 1 $
+ * @author venosov
  */
 public class PropertyFileUserStorageProvider implements
         UserStorageProvider,
@@ -59,7 +60,7 @@ public class PropertyFileUserStorageProvider implements
         UserQueryProvider {
 
 
-    public static final String UNSET_PASSWORD="#$!-UNSET-PASSWORD";
+    public static final String UNSET_PASSWORD = "#$!-UNSET-PASSWORD";
 
     protected KeycloakSession session;
     protected Properties properties;
@@ -89,19 +90,24 @@ public class PropertyFileUserStorageProvider implements
     }
 
     protected UserModel createAdapter(RealmModel realm, String username) {
-        return new AbstractUserAdapterFederatedStorage(session, realm, model) {
-            @Override
-            public String getUsername() {
-                return username;
-            }
+        UserModel local = session.userLocalStorage().getUserByUsername(username, realm);
 
+        if (local == null) {
+            local = session.userLocalStorage().addUser(realm, username);
+            local.setFederationLink(model.getId());
+        }
+
+        return new UserModelDelegate(local) {
             @Override
             public void setUsername(String username) {
-                String pw = (String)properties.remove(username);
+                String pw = (String) properties.remove(username);
+
                 if (pw != null) {
                     properties.put(username, pw);
                     save();
                 }
+
+                super.setUsername(username);
             }
         };
     }
@@ -136,7 +142,7 @@ public class PropertyFileUserStorageProvider implements
         int i = 0;
         for (Object obj : properties.keySet()) {
             if (i++ < firstResult) continue;
-            String username = (String)obj;
+            String username = (String) obj;
             UserModel user = getUserByUsername(username, realm);
             users.add(user);
             if (users.size() >= maxResults) break;
@@ -156,7 +162,7 @@ public class PropertyFileUserStorageProvider implements
         List<UserModel> users = new LinkedList<>();
         int i = 0;
         for (Object obj : properties.keySet()) {
-            String username = (String)obj;
+            String username = (String) obj;
             if (!username.contains(search)) continue;
             if (i++ < firstResult) continue;
             UserModel user = getUserByUsername(username, realm);
@@ -231,9 +237,6 @@ public class PropertyFileUserStorageProvider implements
     }
 
 
-
-
-
     // CredentialInputValidator methods
 
     @Override
@@ -251,7 +254,7 @@ public class PropertyFileUserStorageProvider implements
     public boolean isValid(RealmModel realm, UserModel user, CredentialInput input) {
         if (!supportsCredentialType(input.getType()) || !(input instanceof UserCredentialModel)) return false;
 
-        UserCredentialModel cred = (UserCredentialModel)input;
+        UserCredentialModel cred = (UserCredentialModel) input;
         String password = properties.getProperty(user.getUsername());
         if (password == null || UNSET_PASSWORD.equals(password)) return false;
         return password.equals(cred.getValue());
@@ -263,7 +266,7 @@ public class PropertyFileUserStorageProvider implements
     public boolean updateCredential(RealmModel realm, UserModel user, CredentialInput input) {
         if (!(input instanceof UserCredentialModel)) return false;
         if (!input.getType().equals(CredentialModel.PASSWORD)) return false;
-        UserCredentialModel cred = (UserCredentialModel)input;
+        UserCredentialModel cred = (UserCredentialModel) input;
         synchronized (properties) {
             properties.setProperty(user.getUsername(), cred.getValue());
             save();
@@ -292,6 +295,7 @@ public class PropertyFileUserStorageProvider implements
 
         return disableableTypes;
     }
+
     @Override
     public void close() {
 
